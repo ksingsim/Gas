@@ -1,0 +1,124 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.*;
+import java.net.*;
+import java.util.*;
+import java.util.List;
+
+public class Client extends JFrame {
+
+    private Map<Integer, Server.Player> players = new HashMap<>();
+    private GamePanel gamePanel;
+    private int playerId;
+
+    public Client(String serverIP) {
+        try {
+            setTitle("Tag Game Client");
+            setSize(600, 400);
+            setDefaultCloseOperation(EXIT_ON_CLOSE);
+
+            // 🔹 Debug ก่อนสร้าง socket
+            System.out.println("🔹 Connecting to server at " + serverIP + ":12345");
+
+            Socket socket = new Socket(serverIP, 12345);
+
+            // 🔹 สร้าง OutputStream ก่อน InputStream
+            ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+            ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
+
+            System.out.println("🔹 Socket created, streams ready");
+
+            // 🔹 รับ playerId จาก server
+            playerId = in.readInt();
+            System.out.println("🔹 Connected as Player " + playerId);
+
+            // 🔹 สร้าง GUI
+            gamePanel = new GamePanel();
+            add(gamePanel);
+            setVisible(true);
+
+            // Thread รับข้อมูลจาก Server
+            new Thread(() -> {
+                try {
+                    while(true) {
+                        List<Server.Player> list = (List<Server.Player>) in.readObject();
+                        synchronized(players) {
+                            players.clear();
+                            for(Server.Player p: list) players.put(p.id, p);
+                        }
+                        gamePanel.repaint();
+                    }
+                } catch(Exception e) {
+                    System.out.println("🔹 Error receiving from server:");
+                    e.printStackTrace();
+                }
+            }).start();
+
+            // Key Listener
+            gamePanel.setFocusable(true);
+            gamePanel.addKeyListener(new KeyAdapter() {
+                @Override
+                public void keyPressed(KeyEvent e) {
+                    String cmd = null;
+                    switch(e.getKeyCode()) {
+                        case KeyEvent.VK_W: cmd="UP"; break;
+                        case KeyEvent.VK_S: cmd="DOWN"; break;
+                        case KeyEvent.VK_A: cmd="LEFT"; break;
+                        case KeyEvent.VK_D: cmd="RIGHT"; break;
+                        case KeyEvent.VK_UP: cmd="UP"; break;
+                        case KeyEvent.VK_DOWN: cmd="DOWN"; break;
+                        case KeyEvent.VK_LEFT: cmd="LEFT"; break;
+                        case KeyEvent.VK_RIGHT: cmd="RIGHT"; break;
+                    }
+                    if(cmd!=null) {
+                        try {
+                            out.writeObject(cmd);
+                            out.flush();
+                            System.out.println("🔹 Sent command: " + cmd);
+                        } catch(Exception ex) { ex.printStackTrace(); }
+                    }
+                }
+            });
+
+        } catch(Exception e) {
+            System.out.println("🔹 Failed to connect:");
+            e.printStackTrace();
+        }
+    }
+
+    class GamePanel extends JPanel {
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            setBackground(Color.DARK_GRAY);
+
+            // Score overlay
+            g.setColor(Color.WHITE);
+            g.setFont(new Font("Arial", Font.BOLD, 18));
+            int y=20;
+            synchronized(players) {
+                for(Server.Player p: players.values()) {
+                    g.drawString("Player " + p.id + ": " + p.score, 10, y);
+                    y += 25;
+                }
+                // วาดผู้เล่น
+                for(Server.Player p: players.values()) {
+                    g.setColor(p.id == playerId ? Color.BLUE : Color.RED);
+                    g.fillRect(p.x, p.y, 30, 30);
+                    if(p.isTagger) {
+                        g.setColor(Color.YELLOW);
+                        g.drawRect(p.x-2, p.y-2, 34, 34);
+                    }
+                }
+            }
+            // Debug repaint
+            System.out.println("🔹 repaint called");
+        }
+    }
+
+    public static void main(String[] args) {
+        String serverIP = JOptionPane.showInputDialog("Enter server IP (e.g., localhost):");
+        new Client(serverIP);
+    }
+}
