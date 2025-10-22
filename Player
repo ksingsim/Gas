@@ -1,0 +1,18 @@
+import java.io.Serializable;
+
+public class Player implements Serializable {
+    public int id;
+    public int x, y;
+    public int score;
+    public boolean isTagger;
+
+    public Player() {} // default constructor
+
+    public Player(int id, int x, int y, boolean isTagger) {
+        this.id = id;
+        this.x = x;
+        this.y = y;
+        this.score = 0;
+        this.isTagger = isTagger;
+    }
+}
